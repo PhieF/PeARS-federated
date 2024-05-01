@@ -27,8 +27,6 @@ ENV EMAIL_PASSWORD=your-email-password
 ENV SECRET_KEY=your-secret-key
 ENV SECURITY_PASSWORD_SALT=your-security-password-salt
 
-ENV PA_USERNAME=your-pythonanywhere-username
-
 ENV SITENAME="Cool PeARS pod"
 ENV SITE_TOPIC="Cool topic of my cool PeARS pod"
 ENV SEARCH_PLACEHOLDER="Search example: Books, Articles"
