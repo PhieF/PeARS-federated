@@ -9,8 +9,6 @@ RUN pip install -r requirements.txt
 # Additionally, install Gunicorn
 RUN pip install gunicorn
 
-RUN flask db init
-
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
 
@@ -30,8 +28,14 @@ ENV SECURITY_PASSWORD_SALT=your-security-password-salt
 ENV SITENAME="Cool PeARS pod"
 ENV SITE_TOPIC="Cool topic of my cool PeARS pod"
 ENV SEARCH_PLACEHOLDER="Search example: Books, Articles"
+ENV SQLALCHEMY_DATABASE_URI="sqlite:////var/lib/pears/data/app.db"
+ENV POD_DIR="/var/lib/pears/data/pod"
+ENV SUGGESTIONS_DIR="/var/lib/pears/data/userdata"
 
-# Run the application using Gunicorn
-# Adjust the number of workers and threads as needed
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "3", "-t", "120", "app:app"]
+RUN mkdir -p /var/lib/pears/data/pod /var/lib/pears/data/userdata
+
+RUN chmod +x /app/deployment/entrypoint.sh
+
+# Set the entrypoint script to be executed
+ENTRYPOINT ["/app/deployment/entrypoint.sh"]
 
