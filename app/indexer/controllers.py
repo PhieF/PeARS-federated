@@ -10,18 +10,19 @@ import hashlib
 from flask import session, Blueprint, request, render_template, url_for, flash
 from flask_login import login_required, current_user
 from flask_babel import gettext
+from werkzeug.utils import secure_filename
 from langdetect import detect
-from app.auth.decorators import check_is_confirmed
+from app.auth.decorators import check_is_confirmed, check_is_admin
 from app import LANGS, OWN_BRAND
 from app.api.models import Urls, Pods
 from app.indexer import mk_page_vector
-from app.utils import read_urls, parse_query
+from app.utils import read_urls, parse_query, process_local_file
 from app.utils_db import (create_idx_to_url, create_pod_in_db, create_pod_npz_pos,
         add_to_idx_to_url, add_to_npz_to_idx, create_or_replace_url_in_db,
         delete_url_representations)
 from app.indexer.access import request_url
 from app.indexer.posix import posix_doc
-from app.forms import IndexerForm, ManualEntryForm
+from app.forms import IndexerForm, ManualEntryForm, LocalEntryForm
 
 app_dir_path = dirname(dirname(realpath(__file__)))
 suggestions_dir_path = getenv("SUGGESTIONS_DIR", join(app_dir_path, 'static', 'userdata'))
@@ -155,15 +156,62 @@ def index_from_manual():
         url = 'pearslocal'+h.hexdigest()
         theme = 'Tips'
         note = ''
+        doc = None
         session['index_url'] = url
         session['index_title'] = title
         session['index_description'] = snippet
-        success, messages, share_url = run_indexer_manual(url, title, snippet, theme, lang, note, contributor, request.host_url)
+        success, messages, share_url = run_indexer_manual(url, title, snippet, doc, theme, lang, note, contributor, request.host_url)
         if success:
             return render_template('indexer/success.html', messages=messages, share_url=share_url,  theme=theme, note=snippet)
         return render_template('indexer/fail.html', messages = messages)
     return render_template('indexer/index.html', form1=IndexerForm(request.form), form2=form)
 
+
+
+@indexer.route("/local", methods=["GET","POST"])
+@login_required
+@check_is_admin
+@check_is_confirmed
+def index_from_local():
+    """ Route for local entry form.
+    This is to index local files that the admin
+    may want to share on the instance.
+    Validates the LocalEntryForm and calls the
+    indexer (local_progress_file).
+    """
+    print("\t>> Indexer : local")
+    contributor = current_user.username
+    create_idx_to_url(contributor)
+    num_db_entries = len(Urls.query.all())
+    pods = Pods.query.all()
+    themes = list(set([p.name.split('.u.')[0] for p in pods]))
+
+    form = LocalEntryForm()
+    if form.validate_on_submit():
+        filename = secure_filename(form.infile.data.filename)
+        filepath = join(suggestions_dir_path, filename)
+        form.infile.data.save(filepath)
+        title = filename
+        theme = request.form.get('theme').strip()
+        doc = process_local_file(filepath)
+        description = request.form.get('description').strip()
+        if len(description) > 0:
+            lang = detect(description)
+        else:
+            lang = LANGS[0]
+        # Hack if language of contribution is not recognized
+        if lang not in LANGS:
+            lang = LANGS[0]
+        url = join(request.host_url,'static','userdata',filename)
+        note = ''
+        session['index_url'] = url
+        session['index_title'] = title
+        session['index_description'] = description
+        success, messages, share_url = run_indexer_manual(url, title, description, doc, theme, lang, note, contributor, request.host_url)
+        if success:
+            return render_template('indexer/success.html', messages=messages, share_url=share_url,  theme=theme, note=description)
+        return render_template('indexer/fail.html', messages = messages)
+    return render_template('indexer/local.html', form=LocalEntryForm(), themes=themes, num_entries=num_db_entries)
 
 
 def run_indexer_url(user_url_file, host_url):
@@ -212,11 +260,11 @@ def run_indexer_url(user_url_file, host_url):
             messages.extend(request_errors)
         #Only sleep if we are indexing many pages at the same time
         if url != urls[-1]:
-            sleep(2)
+            sleep(3)
     return indexed, messages, share_url
 
 
-def run_indexer_manual(url, title, doc, theme, lang, note, contributor, host_url):
+def run_indexer_manual(url, title, snippet, doc, theme, lang, note, contributor, host_url):
     """ Run the indexer over manually contributed information.
     
     Arguments: a url (internal and bogus, constructed by 'index_from_manual'),
@@ -229,9 +277,16 @@ def run_indexer_manual(url, title, doc, theme, lang, note, contributor, host_url
     create_pod_npz_pos(contributor, theme, lang)
     create_pod_in_db(contributor, theme, lang)
     idx = add_to_idx_to_url(contributor, url)
+    if doc is not None:
+        doc = f"{snippet} {doc}"
+    else:
+        doc = snippet
     success, text, snippet, vid = mk_page_vector.compute_vector_local_docs(\
             title, doc, theme, lang, contributor)
-    share_url = join(host_url, url_for('api.return_specific_url')+'?url='+url)
+    if url.startswith(host_url):
+        share_url = url
+    else:
+        share_url = join(host_url, url_for('api.return_specific_url')+'?url='+url)
     if success:
         posix_doc(text, idx, contributor, lang, theme)
         add_to_npz_to_idx(theme+'.u.'+contributor, lang, vid, idx)

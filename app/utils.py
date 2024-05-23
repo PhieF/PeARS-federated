@@ -78,13 +78,13 @@ def read_urls(url_file):
                 errors = True
     return urls, keywords, notes, contributors, errors
 
-def read_docs(doc_file):
+def read_corpus(corpus_file):
     """ Read document file in <doc></doc> format.
     In PeARS Federated, used to index the information
     provided by users (offline, not on the Web).
     """
     urls = []
-    with open(doc_file) as df:
+    with open(corpus_file) as df:
         for l in df:
             l=l.rstrip('\n')
             if l[:4] == "<doc":
@@ -96,6 +96,18 @@ def read_docs(doc_file):
                 urls.append(url)
     return urls
 
+def read_single_txt(txt_file, k):
+    """Read .txt file and returns top k words"""
+    txt = ""
+    with open(txt_file, encoding='utf-8') as fin:
+        txt = ' '.join(fin.read().splitlines())
+    txt = ' '.join(txt.split()[:k])
+    return txt
+
+def process_local_file(filename):
+    if filename[-4:] == '.txt':
+        return read_single_txt(filename, 500)
+    return None
 
 def normalise(v):
     norm = np.linalg.norm(v)

@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, StringField, TextAreaField, PasswordField, HiddenField, URLField
+from wtforms import BooleanField, StringField, TextAreaField, PasswordField, HiddenField, URLField, FileField
 from wtforms.validators import Length, DataRequired, InputRequired, EqualTo, Email, URL
 from flask_babel import lazy_gettext
 
@@ -39,6 +39,11 @@ class ManualEntryForm(FlaskForm):
     title = StringField(lazy_gettext('A title for your entry'), [DataRequired(), Length(min=8, max=100, message=lazy_gettext("The title of your entry should have between 4 and 100 characters."))])
     description = TextAreaField(lazy_gettext('Description'), [DataRequired(), Length(max=500)])
     accept_tos = BooleanField(lazy_gettext('I confirm that my entry does not contravene the Terms of Service'), [DataRequired()])
+
+class LocalEntryForm(FlaskForm):
+    infile = FileField(lazy_gettext('A file to upload'))
+    theme = StringField(lazy_gettext('Theme'), [DataRequired(), Length(max=50)],  render_kw={"placeholder": lazy_gettext("A category for your URL. Start typing and suggestions will appear, but you can also write your own.")})
+    description = TextAreaField(lazy_gettext('Description*'), [Length(max=500)],  render_kw={"placeholder": lazy_gettext("Optional description for this resource. Do enter something here if you are indexing images, or any other non-textual resource.")})
 
 class ReportingForm(FlaskForm):
     url = StringField(lazy_gettext('The url you are reporting'), [DataRequired(), URL()])
